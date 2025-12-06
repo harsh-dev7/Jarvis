@@ -1,105 +1,97 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JARVIS Auto Voice Assistant</title>
-
-    <style>
-        body {
-            background: #0d0a20;
-            color: white;
-            font-family: Arial;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
-        .box {
-            width: 90%;
-            max-width: 600px;
-            background: #1b1734;
-            padding: 20px;
-            border-radius: 12px;
-        }
-        #chat {
-            height: 300px;
-            overflow-y: auto;
-            background: #000;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
-        .msg {
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 8px;
-        }
-        .you {
-            background: #5836ff;
-            text-align: right;
-        }
-        .jarvis {
-            background: #292347;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>Jarvis Online</title>
+<style>
+    body {
+        background: #0e0e0e;
+        color: white;
+        text-align: center;
+        font-family: Arial;
+        padding-top: 50px;
+    }
+    h1 {
+        font-size: 40px;
+        color: #1e90ff;
+    }
+    #status {
+        margin-top: 20px;
+        font-size: 20px;
+    }
+</style>
 </head>
-
 <body>
-    <div class="box">
-        <h2>🤖 JARVIS Auto Voice Assistant</h2>
-        <div id="chat"></div>
-        <!-- No buttons, no keyboard, fully automatic -->
-    </div>
+
+<h1>JARVIS ONLINE</h1>
+<p id="status">Click anywhere to activate Jarvis…</p>
 
 <script>
-    const chat = document.getElementById("chat");
+let recognition;
+let active = false;
 
-    function addMessage(text, sender) {
-        const msg = document.createElement("div");
-        msg.className = `msg ${sender}`;
-        msg.textContent = text;
-        chat.appendChild(msg);
-        chat.scrollTop = chat.scrollHeight;
-    }
+function setupRecognition() {
+    recognition = new webkitSpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = false;
 
-    // LOAD GREETING FIRST
-    window.onload = async () => {
-        const res = await fetch("http://localhost:5000/api/greeting");
-        const data = await res.json();
-        addMessage(data.greeting, "jarvis");
-
-        // START auto voice loop after greeting
-        startVoiceLoop();
+    recognition.onstart = () => {
+        document.getElementById("status").innerText = "Listening...";
     };
 
-    // MAIN AUTO VOICE LOOP
-    async function startVoiceLoop() {
-        while (true) {
-            addMessage("🎤 Listening...", "jarvis");
+    recognition.onerror = () => {
+        document.getElementById("status").innerText = "Error occurred. Restarting…";
+        restartListening();
+    };
 
-            const listen = await fetch("http://localhost:5000/api/listen", {
-                method: "POST"
-            });
+    recognition.onend = () => {
+        restartListening();  // Auto restart after completion
+    };
 
-            const heard = await listen.json();
+    recognition.onresult = function(event) {
+        let command = event.results[0][0].transcript;
+        document.getElementById("status").innerText = "You said: " + command;
+        sendCommand(command);
+    };
+}
 
-            if (heard.status === "success") {
-                addMessage(heard.query, "you");
-
-                const res = await fetch("http://localhost:5000/api/command", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ query: heard.query })
-                });
-
-                const reply = await res.json();
-                addMessage(reply.message, "jarvis");
-            } else {
-                addMessage("Didn't catch that. Listening again...", "jarvis");
-            }
-        }
+function restartListening() {
+    if (active) {
+        setTimeout(() => recognition.start(), 400);
     }
+}
+
+function sendCommand(command) {
+    fetch("/process", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command })
+    })
+    .then(res => res.json())
+    .then(data => {
+        speak(data.reply);
+
+        if (data.action === "open_url") {
+            window.open(data.url, "_blank");
+        }
+    });
+}
+
+function speak(text) {
+    let msg = new SpeechSynthesisUtterance(text);
+    window.speechSynthesis.speak(msg);
+}
+
+// 🔥 Auto-start listening AFTER first user click (browser rule)
+window.addEventListener("click", () => {
+    if (!active) {
+        active = true;
+        setupRecognition();
+        recognition.start();
+        document.getElementById("status").innerText = "Activating… Listening now.";
+    }
+});
 </script>
 
 </body>
