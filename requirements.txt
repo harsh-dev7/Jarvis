@@ -4,4 +4,3 @@ pyttsx3
 SpeechRecognition
 wikipedia
 gunicorn
-os
